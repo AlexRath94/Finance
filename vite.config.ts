@@ -6,28 +6,30 @@ import react from '@vitejs/plugin-react';
  * requests only to the two price services. The browser blocks every other connection,
  * so no data can leave the device even by mistake.
  */
-const CSP = [
-  "default-src 'self'",
-  "script-src 'self' 'wasm-unsafe-eval'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  "connect-src 'self' https://api.gold-api.com https://api.frankfurter.dev https://api.frankfurter.app",
-  "worker-src 'self' blob:",
-  "manifest-src 'self'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'none'",
-].join('; ');
+const csp = (android: boolean) =>
+  [
+    "default-src 'self'",
+    // Android: on outdated system WebViews Capacitor falls back to an inline bridge script.
+    android ? "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'" : "script-src 'self' 'wasm-unsafe-eval'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "connect-src 'self' https://api.gold-api.com https://api.frankfurter.dev https://api.frankfurter.app",
+    "worker-src 'self' blob:",
+    "manifest-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'none'",
+  ].join('; ');
 
-function securityHeaders(): Plugin {
+function securityHeaders(android: boolean): Plugin {
   return {
     name: 'finanzplaner-csp',
     apply: 'build',
     transformIndexHtml: (html) =>
       html.replace(
         '<meta charset="UTF-8" />',
-        `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${CSP}" />\n    <meta name="referrer" content="no-referrer" />`,
+        `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${csp(android)}" />\n    <meta name="referrer" content="no-referrer" />`,
       ),
   };
 }
@@ -78,8 +80,9 @@ self.addEventListener('fetch', (e) => {
 }
 
 // base: './' lets the built app run from any sub-path (e.g. GitHub Pages).
-export default defineConfig({
+// `vite build --mode android` builds the files for the APK: no offline cache needed there.
+export default defineConfig(({ mode }) => ({
   base: './',
-  plugins: [react(), securityHeaders(), serviceWorker()],
+  plugins: [react(), securityHeaders(mode === 'android'), ...(mode === 'android' ? [] : [serviceWorker()])],
   build: { chunkSizeWarningLimit: 1500 },
-});
+}));

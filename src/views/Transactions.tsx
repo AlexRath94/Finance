@@ -7,6 +7,7 @@ import { AccountSelect, accountLabel } from '../components/AccountSelect';
 import { TxList, displayAmount, txTitle } from '../components/TxList';
 import { Money } from '../components/ui';
 import { accountTotal } from '../lib/calc';
+import { exportFile } from '../lib/fileExport';
 
 export function Transactions() {
   const { data, activePots, potById, accountById, balances } = useData();
@@ -87,12 +88,7 @@ export function Transactions() {
       ]);
     }
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
-    const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `buchungen-${month || 'alle'}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    exportFile(`buchungen-${month || 'alle'}.csv`, '\uFEFF' + csv, 'text/csv;charset=utf-8');
   };
 
   const acc = accountId ? accountById.get(accountId) : undefined;

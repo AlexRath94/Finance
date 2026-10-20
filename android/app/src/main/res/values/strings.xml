@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Finanzen</string>
+    <string name="title_activity_main">Finanzen</string>
+    <string name="package_name">de.finanzplaner.app</string>
+    <string name="custom_url_scheme">de.finanzplaner.app</string>
+</resources>

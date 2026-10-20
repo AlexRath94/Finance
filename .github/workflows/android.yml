@@ -1,0 +1,83 @@
+# Builds the Android app (APK) and offers it for download under "Releases".
+# The signing key lives only in the repository secrets, never in the code.
+name: Android-App
+
+on:
+  push:
+    branches: [ccr-e2faa229-lav0ao]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Signierschlüssel vorhanden?
+        id: key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - run: npm ci
+      - run: npm test
+      - run: npx tsc -b && npx vite build --mode android
+      - run: npx cap sync android
+
+      - name: APK bauen und signieren
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 1.0.${{ github.run_number }}
+        run: |
+          # Without the key the build still runs as a check, but the APK is not published.
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.p12"
+            export KEYSTORE_FILE="$RUNNER_TEMP/release.p12"
+          fi
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+          ls app/build/outputs/apk/release/
+          cp app/build/outputs/apk/release/app-release*.apk "$GITHUB_WORKSPACE/Finanzen.apk"
+          rm -f "$RUNNER_TEMP/release.p12"
+
+      - name: Zum Download bereitstellen
+        if: steps.key.outputs.present == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Finanzen 1.0.${{ github.run_number }}
+          make_latest: true
+          files: Finanzen.apk
+          body: |
+            Android-App „Finanzen“. Auf dem Handy herunterladen und öffnen.
+            Updates einfach über die vorhandene App installieren – die Daten bleiben erhalten.
+
+      - name: Hinweis bei fehlendem Schlüssel
+        if: steps.key.outputs.present != 'true'
+        run: |
+          # An APK signed with a changing key could not be installed as an update – the data
+          # on the phone would be lost. So nothing is published until the key is set up.
+          echo "::error::Build OK, aber nicht veröffentlicht: Secrets ANDROID_KEYSTORE_BASE64 und ANDROID_KEYSTORE_PASSWORD fehlen (Settings → Secrets and variables → Actions)."
+          exit 1

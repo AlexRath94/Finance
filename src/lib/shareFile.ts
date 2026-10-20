@@ -1,4 +1,5 @@
 import type { AppData } from '../types';
+import { exportFile } from './fileExport';
 
 /**
  * File format for backups and for passing data to the partner's phone (via messenger, AirDrop, …).
@@ -91,23 +92,7 @@ export function isEncryptedFile(text: string): boolean {
   }
 }
 
-/** Opens the phone's share sheet (WhatsApp, Signal, AirDrop, …) or falls back to a download. */
-export async function shareOrDownload(file: ShareFile, fileName: string): Promise<'shared' | 'downloaded' | 'cancelled'> {
-  const blob = new Blob([JSON.stringify(file)], { type: 'application/json' });
-  const f = new File([blob], fileName, { type: 'application/json' });
-  if (navigator.canShare?.({ files: [f] })) {
-    try {
-      await navigator.share({ files: [f], title: 'Finanzplaner' });
-      return 'shared';
-    } catch (e) {
-      if ((e as Error).name === 'AbortError') return 'cancelled';
-    }
-  }
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-  return 'downloaded';
+/** Opens the phone's share menu (Drive, Files, messenger, …) or falls back to a download. */
+export function shareOrDownload(file: ShareFile, fileName: string) {
+  return exportFile(fileName, JSON.stringify(file), 'application/json');
 }
